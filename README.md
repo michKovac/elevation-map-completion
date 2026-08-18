@@ -30,15 +30,20 @@ code recomputes.
 
 ## What is in the pipeline
 
-| # | Stage | Entry point |
+Three commands cover it, backed by the library.
+
+| # | Stage | Where |
 |---|---|---|
-| 1 | Build our dataset from TartanGround | `scripts/download_tartanground.py`, `scripts/build_dataset.py` |
+| 1 | Build our dataset from TartanGround | `scripts/build_dataset.py` |
 | 2 | Preprocessing, normalisation, folds | `elevcomp/dataset.py`, `elevcomp/folds.py` |
-| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train.py`, `scripts/evaluate.py` |
-| 4 | Ray-cone augmentation | `elevcomp/dataset.py`, `scripts/preview_augmentation.py` |
-| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `elevcomp/inference.py`, `scripts/eval_uncertainty.py` |
-| 6 | Traversability prediction | `elevcomp/traversability.py`, `scripts/traversability_eval.py` |
+| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train.py` |
+| 4 | Ray-cone augmentation | `elevcomp/dataset.py` |
+| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `elevcomp/inference.py`, `elevcomp/calibration.py` |
+| 6 | Traversability prediction | `elevcomp/traversability.py` |
 | 7 | End-to-end example | `examples/end_to_end.py` |
+
+Training evaluates each fold as it goes, including the uncertainty calibration
+(AUSE, coverage@1σ, β-NLL vs TTA), so there is no separate evaluation step to run.
 
 ---
 
@@ -137,12 +142,10 @@ Exact versions behind the reported numbers are in `requirements-lock.txt`
 ## Data
 
 The source data is the **TartanGround** dataset (CC BY 4.0), which we do not
-redistribute. Our dataset is regenerated from it in two commands:
+redistribute. Our dataset is regenerated from it in one command:
 
 ```bash
-python scripts/download_tartanground.py --root /data/tartanground
-python scripts/build_dataset.py --tartanground_root /data/tartanground \
-    --out datasets/elevation_dataset
+python scripts/build_dataset.py --tartanground_root /data/tartanground --download
 ```
 
 The generator reproduces the published dataset **bit-exactly** — verified against the
@@ -170,29 +173,18 @@ Point the code at the result with `ELEVCOMP_DATA_ROOT`, or pass `--data_root`.
 ## Running the pipeline
 
 ```bash
-export ELEVCOMP_DATA_ROOT=/path/to/elevation_dataset
+# 1. get the data (~130 GB source, ~10 GB result)
+python scripts/build_dataset.py --tartanground_root /data/tartanground --download
+export ELEVCOMP_DATA_ROOT=$PWD/datasets/elevation_dataset
 
-# train — 5-fold leave-one-environment-out
+# 2. train — 5-fold leave-one-environment-out, metrics written per fold
 python scripts/train.py --name resnet34
 
-# metrics of one trained fold
-python scripts/evaluate.py --checkpoint runs/cv_resnet34_<ts>/fold_0_ForestEnv/best.pth
-
-# uncertainty: beta-NLL head vs D4 TTA, with calibration curves
-python scripts/eval_uncertainty.py --checkpoint <fold>/best.pth
-
-# traversability, with the uncertainty gate swept
-python scripts/traversability_eval.py --tau_sweep
-
-# what the ray-cone augmentation does to the input
-python scripts/preview_augmentation.py
-
-# one sample from input to gated traversability decision
-python examples/end_to_end.py --checkpoint <fold>/best.pth
+# 3. one sample from input to gated traversability decision
+python examples/end_to_end.py --checkpoint runs/cv_resnet34_<ts>/fold_0_ForestEnv/best.pth
 ```
 
-Evaluation scripts default to the newest `runs/cv_*` directory; override with
-`--exp_dir` or `ELEVCOMP_EXPERIMENT`. A two-epoch smoke test of the whole pipeline:
+A two-epoch smoke test of the whole pipeline, before committing to a real run:
 
 ```bash
 python scripts/train.py --name smoke --debug 12 --epochs 2
@@ -229,9 +221,10 @@ elevcomp/               library — imported, not executed
   cv.py                   cross-validation driver
   paths.py                ELEVCOMP_ROOT / _DATA_ROOT / _EXPERIMENT resolution
 configs/default.toml    training settings used in the paper
-scripts/                the seven entry points of the pipeline
-examples/               end-to-end demo and sample data
-docs/DATASET.md         how to obtain and regenerate the data
+scripts/build_dataset.py   TartanGround -> our dataset (--download fetches the source)
+scripts/train.py           5-fold training with per-fold evaluation
+examples/end_to_end.py     one sample -> completion, sigma, traversability
+docs/DATASET.md            how to obtain and regenerate the data
 ```
 
 ---

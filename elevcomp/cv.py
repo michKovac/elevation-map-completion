@@ -106,7 +106,6 @@ Created: {created}
     - learning_curves.png, calibration_test.png, test_samples.png
   - predictions/test/<traj>/<sample>.npz — pred_nll, sigma_nll, pred_tta, sigma_tta
     (normalized float16, aligned to the source NPZ; see predictions/meta.json)
-- baselines/ — classical baseline results (created by run_baselines.py)
 - summary/ — summary.json, summary_folds.csv, table_main.tex,
   table_uncertainty.tex, table_domain_gap.tex, test_rmse_by_env.png
 

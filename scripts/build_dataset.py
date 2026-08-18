@@ -9,15 +9,14 @@ elevation cropped from the environment's global point cloud.
 The defaults reproduce the dataset used in the paper: a 50 x 50 m robot-centric
 window at 0.2 m/cell (251 x 251), per-cell 20th percentile of point heights.
 
-    # one environment
-    python scripts/build_dataset.py --env OldTownSummer \
-        --tartanground_root /data/tartanground --out datasets/elevation_dataset
+    # download the source data (~130 GB) and build everything
+    python scripts/build_dataset.py --tartanground_root /data/tartanground --download
 
-    # all five environments of the paper
-    python scripts/build_dataset.py --env all \
-        --tartanground_root /data/tartanground --out datasets/elevation_dataset
+    # build one environment from data already on disk
+    python scripts/build_dataset.py --tartanground_root /data/tartanground \
+        --env OldTownSummer --out datasets/elevation_dataset
 
-Expected input layout (as produced by scripts/download_tartanground.py):
+Expected input layout:
 
     <tartanground_root>/<Env>/<Env>_sem.pcd
     <tartanground_root>/<Env>/Data_anymal/<Traj>/depth_lcam_{front,left,right,back}/
@@ -36,16 +35,30 @@ from elevcomp.data.io import save_sample
 from elevcomp.data.raster import DEFAULT_PERCENTILE, apply_axis_mapping, rasterize_elevation
 from elevcomp.paths import data_root
 
-# The five environments of the paper, spanning forest, rural, suburban and urban.
-PAPER_ENVIRONMENTS = ["ForestEnv", "Gascola", "ModularNeighborhood",
-                      "OldTownSummer", "SeasonalForestWinter"]
+# Trajectories differ per environment: ForestEnv is numbered from P2001.
+ENVIRONMENT_TRAJECTORIES = {
+    "ForestEnv":           ["P2001", "P2002", "P2003", "P2004", "P2005"],
+    "Gascola":             ["P2000", "P2001", "P2002", "P2003", "P2004"],
+    "ModularNeighborhood": ["P2000", "P2001", "P2002", "P2003", "P2004"],
+    "OldTownSummer":       ["P2000", "P2001", "P2002", "P2003", "P2004"],
+    "SeasonalForestWinter":["P2000", "P2001", "P2002", "P2003", "P2004"],
+}
+
+# sem_pcd carries the global cloud used as ground truth; meta and imu come with
+# the poses the accumulation needs.
+DOWNLOAD_MODALITIES = ["meta", "depth", "imu", "sem_pcd"]
+DOWNLOAD_CAMERAS = ["lcam_front", "lcam_left", "lcam_right", "lcam_back"]
+
+PAPER_ENVIRONMENTS = list(ENVIRONMENT_TRAJECTORIES)
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--tartanground_root', required=True,
-                   help='directory holding the downloaded TartanGround environments')
+                   help='directory holding (or to receive) the TartanGround environments')
+    p.add_argument('--download', action='store_true',
+                   help='fetch the source data first (~130 GB); needs the tartanair package')
     p.add_argument('--env', nargs='+', default=['all'],
                    help=f"environments to build, or 'all' for {', '.join(PAPER_ENVIRONMENTS)}")
     p.add_argument('--trajs', nargs='+', default=None,
@@ -67,6 +80,23 @@ def parse_args():
     p.add_argument('--overwrite', action='store_true',
                    help='rebuild samples that already exist')
     return p.parse_args()
+
+
+def download(root: str, envs: list, num_workers: int = 4) -> None:
+    """Fetch the source data with the official toolkit."""
+    try:
+        import tartanair as ta
+    except ImportError:
+        raise SystemExit('--download needs the tartanair package: pip install -e ".[data]"')
+
+    ta.init(root)
+    for env in envs:
+        trajs = ENVIRONMENT_TRAJECTORIES[env]
+        print(f'[{env}] downloading {len(trajs)} trajectories: {", ".join(trajs)}', flush=True)
+        ta.download_ground(env=[env], version=['anymal'], traj=trajs,
+                           modality=DOWNLOAD_MODALITIES, camera_name=DOWNLOAD_CAMERAS,
+                           unzip=True, delete_zip=True, num_workers=num_workers,
+                           data_source='huggingface')
 
 
 def trajectory_dirs(env_dir: Path, requested) -> list:
@@ -124,6 +154,13 @@ def main():
     out_root = Path(args.out).expanduser() if args.out else data_root()
 
     envs = PAPER_ENVIRONMENTS if args.env == ['all'] else args.env
+    unknown = [e for e in envs if e not in ENVIRONMENT_TRAJECTORIES]
+    if unknown:
+        raise SystemExit(f'Unknown environment(s): {", ".join(unknown)}')
+
+    if args.download:
+        download(str(root), envs)
+
     h = args.half_extent
     bounds = np.array([-h, h, -h, h, -h, h], dtype=np.float32)
 

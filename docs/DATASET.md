@@ -19,8 +19,11 @@ redistributed provided the citation above is carried along. See `LICENSE-DATA`.
 
 ```bash
 pip install -e ".[data]"
-python scripts/download_tartanground.py --root /data/tartanground
+python scripts/build_dataset.py --tartanground_root /data/tartanground --download
 ```
+
+`--download` fetches the source data and then builds our dataset in one go. To do the
+two steps separately, drop the flag once the data is already on disk.
 
 This fetches five environments in the `anymal` version, modalities `meta`, `depth`,
 `imu`, `sem_pcd`, and the four horizontal cameras `lcam_{front,left,right,back}`.
@@ -34,7 +37,7 @@ Around 130 GB unpacked.
 | OldTownSummer | dense historic urban | P2000–P2004 |
 | SeasonalForestWinter | forest, snow cover | P2000–P2004 |
 
-ForestEnv is numbered from P2001 — `scripts/download_tartanground.py` handles this.
+ForestEnv is numbered from P2001 — `scripts/build_dataset.py --download` handles this.
 
 The expected layout afterwards:
 
@@ -51,6 +54,8 @@ python scripts/build_dataset.py \
     --tartanground_root /data/tartanground \
     --out datasets/elevation_dataset
 ```
+
+(Already done if you passed `--download` above.)
 
 Roughly 6.5 s per sample, dominated by the KD-tree query against the global cloud, so
 the full build takes about two days single-threaded. Trajectories are independent —

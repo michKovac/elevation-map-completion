@@ -18,7 +18,7 @@ matplotlib>=3.9
 tqdm>=4.66
 tensorboard>=2.17
 
-# Dataset generation (scripts/build_dataset.py, scripts/download_tartanground.py)
+# Dataset generation (scripts/build_dataset.py)
 open3d>=0.18
 opencv-contrib-python>=4.10
 tartanair>=1.0

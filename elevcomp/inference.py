@@ -1,8 +1,8 @@
 """
 Inference helpers: single-pass (β-NLL) prediction and D4 TTA self-ensemble.
 
-Single source of truth for both uncertainty methods — used by the CV driver,
-scripts/eval_uncertainty.py and tools/tta_inference.py.
+Single source of truth for both uncertainty methods, used by the training
+driver and by examples/end_to_end.py.
 
 β-NLL heteroscedastic uncertainty (model predicts mean + log-variance):
     Kendall & Gal, "What Uncertainties Do We Need in Bayesian Deep Learning
