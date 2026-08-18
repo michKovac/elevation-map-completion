@@ -19,14 +19,9 @@ Reference implementation for:
 
 ## Repository status
 
-Code, configuration and licensing are in place and the training/evaluation entry points
-run. Still landing (see `docs/` once present):
-
-- `scripts/build_dataset.py` and `scripts/download_tartanground.py` — dataset generation
-  is currently documented below but not yet scripted
-- `examples/end_to_end.py`, `examples/sample/*.npz`
-- `docs/DATASET.md`, `docs/REPRODUCE.md`, `docs/EXPERIMENTS.md`
-- released model weights and `results/`
+The dataset, training and evaluation pipeline is complete and runs end to end. Still
+landing: `examples/end_to_end.py` with sample data, `docs/REPRODUCE.md`,
+`docs/EXPERIMENTS.md`, released model weights and `results/`.
 
 ---
 
@@ -34,7 +29,7 @@ run. Still landing (see `docs/` once present):
 
 | # | Stage | Entry point |
 |---|---|---|
-| 1 | Build our dataset from TartanGround | `scripts/build_dataset.py` *(pending)* |
+| 1 | Build our dataset from TartanGround | `scripts/download_tartanground.py`, `scripts/build_dataset.py` |
 | 2 | Preprocessing, normalisation, folds | `elevcomp/dataset.py`, `elevcomp/folds.py` |
 | 3 | Training and inference (ResNet-34 U-Net) | `scripts/train_cv.py`, `elevcomp/inference.py` |
 | 4 | Ray-cone augmentation | `elevcomp/dataset.py` |
@@ -144,26 +139,19 @@ Exact versions behind the reported numbers are in `requirements-lock.txt`
 ## Data
 
 The source data is the **TartanGround** dataset (CC BY 4.0), which we do not
-redistribute. Our derived dataset is generated from it with the parameters below.
+redistribute. Our dataset is regenerated from it in two commands:
 
-Download five environments, `anymal` version, trajectories P2000–P2004
-(**ForestEnv uses P2001–P2005**), modalities `meta, depth, imu, sem_pcd`, cameras
-`lcam_{front,left,right,back}`:
-
-```python
-import tartanair as ta
-ta.init('<data-root>')
-ta.download_ground(
-    env=['ForestEnv', 'Gascola', 'ModularNeighborhood',
-         'OldTownSummer', 'SeasonalForestWinter'],
-    version=['anymal'],
-    traj=['P2000', 'P2001', 'P2002', 'P2003', 'P2004'],
-    modality=['meta', 'depth', 'imu', 'sem_pcd'],
-    camera_name=['lcam_front', 'lcam_left', 'lcam_right', 'lcam_back'],
-    unzip=True, delete_zip=True, data_source='huggingface')
+```bash
+python scripts/download_tartanground.py --root /data/tartanground
+python scripts/build_dataset.py --tartanground_root /data/tartanground \
+    --out datasets/elevation_dataset
 ```
 
-Each sample is then built as follows.
+The generator reproduces the published dataset **bit-exactly** — verified against the
+files used for the paper. Full detail, including the per-environment trajectory lists
+and the sample format, is in **[docs/DATASET.md](docs/DATASET.md)**.
+
+Each sample is built as follows.
 
 | Parameter | Value |
 |---|---|

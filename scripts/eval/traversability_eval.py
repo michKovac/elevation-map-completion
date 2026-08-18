@@ -39,36 +39,15 @@ from elevcomp.dataset import ElevationDataset
 from elevcomp.inference import nll_predict
 from elevcomp.model import build_model
 from elevcomp.folds import eval_loader
+from elevcomp.traversability import RESOLUTION as RES
+from elevcomp.traversability import slope_deg
+from elevcomp.traversability import traversability as trav
 
 ROOT = project_root()
 
 RUN = None   # resolved in main(); override with --exp_dir
 OUT = reports_dir() / 'traversability'
 DEV = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-RES = 0.2   # m/cell
-
-
-def slope_deg(elev, valid, res=RES):
-    """Central-difference terrain slope [deg]; NaN where not computable."""
-    H, W = elev.shape
-    s = np.full((H, W), np.nan, np.float32)
-    dzx = (elev[1:-1, 2:] - elev[1:-1, :-2]) / (2 * res)
-    dzy = (elev[2:, 1:-1] - elev[:-2, 1:-1]) / (2 * res)
-    lv = (valid[1:-1, 1:-1] & valid[1:-1, 2:] & valid[1:-1, :-2]
-          & valid[2:, 1:-1] & valid[:-2, 1:-1])
-    g = np.sqrt(dzx ** 2 + dzy ** 2)
-    sc = s[1:-1, 1:-1]
-    sc[lv] = np.degrees(np.arctan(g[lv]))
-    return s
-
-
-def trav(slope, thr):
-    """1 traversable, 0 non-traversable, -1 unknown/invalid."""
-    t = np.full(slope.shape, -1, np.int8)
-    v = np.isfinite(slope)
-    t[v & (slope <= thr)] = 1
-    t[v & (slope > thr)] = 0
-    return t
 
 
 DEFAULT_SWEEP = '0.3,0.5,0.75,1.0,1.5,2.0,3.0'
