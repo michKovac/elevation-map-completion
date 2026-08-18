@@ -50,6 +50,6 @@ def default_experiment() -> Path:
         raise SystemExit(
             f"No experiment found in {runs_dir()}.\n"
             "Pass --exp_dir <dir>, set ELEVCOMP_EXPERIMENT, or train one first:\n"
-            "  python scripts/train_cv.py --name resnet34"
+            "  python scripts/train.py --name resnet34"
         )
     return candidates[-1]

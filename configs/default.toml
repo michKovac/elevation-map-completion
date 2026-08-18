@@ -1,6 +1,6 @@
 # ==============================================================================
-# Main configuration of the paper: 5-fold leave-one-environment-out experiment
-# (scripts/train_cv.py) and the base for the ablations (scripts/run_ablations.py).
+# Configuration of the 5-fold leave-one-environment-out training run
+# (scripts/train.py). Defaults are the settings used in the paper.
 #
 # Data and splits are not configured here. Folds are built automatically from
 # --data_root (default: $ELEVCOMP_DATA_ROOT or datasets/elevation_dataset) and
@@ -9,22 +9,12 @@
 #
 # Creating an experiment freezes this file into <exp_dir>/experiment.json, so
 # later edits here do not affect experiments that are already running.
-# For single-dataset training see configs/single_run.toml.
 # ==============================================================================
 
 # -- Model ---------------------------------------------------------------------
-model         = "unet_pytorch"  # pconv | unet | attunet | unet_pytorch | segformer
-layer_size    = 6         # pconv only  — number of encoder/decoder levels
-base_channels = 64        # unet only   — channel width of the custom SimpleUNet
-
-# Library models (segmentation_models_pytorch) share the I/O convention and the
-# beta-NLL head, so they differ from each other only in architecture:
-#   unet_pytorch -> smp.Unet resnet34 (~24.4M) — the main model of the paper
-#   attunet      -> the same encoder with scSE decoder attention (~24.5M)
-#   segformer    -> mit_b2 (~24.7M, Transformer)
-#   unet         -> custom SimpleUNet (~11.0M, trained from scratch)
-# encoder_name    = "mit_b2"    # optional encoder override (default per model)
-encoder_weights = "imagenet"    # "imagenet" | "none" (from-scratch)
+model           = "unet_pytorch"  # U-Net with a ResNet-34 encoder (~24.4M)
+encoder_name    = "resnet34"
+encoder_weights = "imagenet"      # "imagenet" | "none" (from-scratch)
 
 # -- Training ------------------------------------------------------------------
 epochs       = 200
@@ -39,9 +29,8 @@ w_hole  = 1.0   # weight on hole pixels only (not observed by the depth cameras)
 
 uncertainty        = true   # heteroscedastic output (prediction + log_var), beta-NLL
 uncertainty_warmup = 100    # epochs of plain L1 before beta-NLL is enabled
-                            # NOTE: when lowering `epochs` for ablations, leave at
-                            # least ~150 epochs after the warmup or sigma will not
-                            # be learned
+                            # NOTE: when lowering `epochs`, leave at least ~150
+                            # epochs after the warmup or sigma will not be learned
 uncertainty_beta   = 0.5    # beta of the beta-NLL loss (Seitzer et al., ICLR 2022)
 
 # -- Augmentation: geometric ---------------------------------------------------

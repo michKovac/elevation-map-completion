@@ -17,11 +17,14 @@ Reference implementation for:
 
 ---
 
-## Repository status
+## Scope
 
-The dataset, training and evaluation pipeline is complete and runs end to end. Still
-landing: `examples/end_to_end.py` with sample data, `docs/REPRODUCE.md`,
-`docs/EXPERIMENTS.md`, released model weights and `results/`.
+This repository is the completion pipeline itself: how to build our dataset from
+TartanGround, how the model is trained and run, and how its output becomes an
+uncertainty-aware traversability decision. The ablations, classical baselines and
+architecture comparisons reported in the paper are experiments around that pipeline and
+are not reproduced here — the numbers below are stated as results, not as things this
+code recomputes.
 
 ---
 
@@ -31,11 +34,11 @@ landing: `examples/end_to_end.py` with sample data, `docs/REPRODUCE.md`,
 |---|---|---|
 | 1 | Build our dataset from TartanGround | `scripts/download_tartanground.py`, `scripts/build_dataset.py` |
 | 2 | Preprocessing, normalisation, folds | `elevcomp/dataset.py`, `elevcomp/folds.py` |
-| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train_cv.py`, `elevcomp/inference.py` |
-| 4 | Ray-cone augmentation | `elevcomp/dataset.py` |
-| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `scripts/eval/eval_uncertainty.py` |
-| 6 | Traversability prediction | `scripts/eval/traversability_eval.py` |
-| 7 | End-to-end example | `examples/end_to_end.py` *(pending)* |
+| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train.py`, `scripts/evaluate.py` |
+| 4 | Ray-cone augmentation | `elevcomp/dataset.py`, `scripts/preview_augmentation.py` |
+| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `elevcomp/inference.py`, `scripts/eval_uncertainty.py` |
+| 6 | Traversability prediction | `elevcomp/traversability.py`, `scripts/traversability_eval.py` |
+| 7 | End-to-end example | `examples/end_to_end.py` |
 
 ---
 
@@ -80,16 +83,11 @@ improvement** over the best classical baseline.
 | Navier–Stokes | 5.251 ± 1.932 |
 | **U-Net (ResNet-34), ours** | **2.855 ± 0.819** |
 
-**Architecture does not decide.** Four models land within 2.85–2.96 m hole RMSE, and a
-trajectory-level paired Wilcoxon test (n = 25) finds no significant difference after Holm
-correction (min. adjusted p = 0.165).
-
-| Model | Family | RMSE | Hole RMSE | SSIM |
-|---|---|---|---|---|
-| U-Net (custom, 11.0 M) | CNN | 3.074 ± 1.049 | 2.934 ± 0.967 | 0.357 ± 0.087 |
-| U-Net (ResNet-34, 24.4 M) | CNN | **2.994 ± 0.939** | 2.855 ± 0.819 | **0.393 ± 0.059** |
-| Attention U-Net (24.5 M) | CNN | 3.004 ± 0.956 | **2.851 ± 0.830** | **0.393 ± 0.047** |
-| SegFormer MiT-B2 (24.7 M) | Transformer | 3.136 ± 0.942 | 2.959 ± 0.831 | 0.364 ± 0.093 |
+**Architecture does not decide.** The paper also trains a custom U-Net, an Attention
+U-Net and a SegFormer MiT-B2 under the same protocol; all four land within 2.85–2.96 m
+hole RMSE and a trajectory-level paired Wilcoxon test (n = 25) finds no significant
+difference after Holm correction (min. adjusted p = 0.165). That is why this repository
+ships only the ResNet-34 variant — the method, not the backbone, is what matters.
 
 **Ray-cone augmentation buys robustness, not accuracy.** On clean input the three
 augmentation settings are indistinguishable (2.838–2.855 m). When a sector is removed at
@@ -169,40 +167,35 @@ Point the code at the result with `ELEVCOMP_DATA_ROOT`, or pass `--data_root`.
 
 ---
 
-## Reproducing the experiments
+## Running the pipeline
 
 ```bash
 export ELEVCOMP_DATA_ROOT=/path/to/elevation_dataset
 
-# main experiment — 5-fold leave-one-environment-out (Tables 4-13, 16-18)
-python scripts/train_cv.py --name resnet34
+# train — 5-fold leave-one-environment-out
+python scripts/train.py --name resnet34
 
-# classical baselines on the same folds (CPU, any time after the experiment exists)
-python scripts/run_baselines.py --exp_dir runs/cv_resnet34_<timestamp>
+# metrics of one trained fold
+python scripts/evaluate.py --checkpoint runs/cv_resnet34_<ts>/fold_0_ForestEnv/best.pth
 
-# augmentation and loss ablations
-python scripts/run_ablations.py
-python scripts/eval/compare_experiments.py runs/cv_abl_* --out reports/ablations
+# uncertainty: beta-NLL head vs D4 TTA, with calibration curves
+python scripts/eval_uncertainty.py --checkpoint <fold>/best.pth
 
-# architecture comparison
-python scripts/train_cv.py --name attunet   --model attunet
-python scripts/train_cv.py --name segformer --model segformer
-python scripts/eval/wilcoxon_architectures.py
+# traversability, with the uncertainty gate swept
+python scripts/traversability_eval.py --tau_sweep
 
-# uncertainty, robustness, traversability, cost
-python scripts/eval/eval_uncertainty.py    --checkpoint <fold>/best.pth
-python scripts/eval/temperature_scaling.py
-python scripts/eval/robustness_eval.py
-python scripts/eval/traversability_eval.py --tau_sweep
-python scripts/eval/benchmark_inference.py --checkpoint <fold>/best.pth
-python scripts/eval/latency_e2e.py
+# what the ray-cone augmentation does to the input
+python scripts/preview_augmentation.py
+
+# one sample from input to gated traversability decision
+python examples/end_to_end.py --checkpoint <fold>/best.pth
 ```
 
-Evaluation tools default to the newest `runs/cv_*` directory; override with `--exp_dir`
-or `ELEVCOMP_EXPERIMENT`. A two-epoch smoke test of the whole pipeline:
+Evaluation scripts default to the newest `runs/cv_*` directory; override with
+`--exp_dir` or `ELEVCOMP_EXPERIMENT`. A two-epoch smoke test of the whole pipeline:
 
 ```bash
-python scripts/train_cv.py --name smoke --debug 12 --epochs 2
+python scripts/train.py --name smoke --debug 12 --epochs 2
 ```
 
 Training takes roughly one day per fold on a single modern GPU at the paper settings
@@ -219,20 +212,26 @@ choice shifts coverage by up to 2e-4. RMSE-style metrics are unaffected.
 ## Layout
 
 ```
-elevcomp/           library — imported, not executed
-  dataset.py          ElevationDataset, augmentations (incl. ray-cone)
-  model.py            PConv-UNet / SimpleUNet / AttentionUNet / ResNet-34 U-Net / SegFormer
-  losses.py           masked L1 and beta-NLL
-  inference.py        single-pass beta-NLL and 8x D4 TTA
-  metrics.py          MAE / RMSE / AbsRel / masked SSIM, in metres
-  calibration.py      sparsification, AUSE, coverage@1-sigma
-  folds.py            environment discovery and fold construction
-  baselines.py        classical hole filling
-  cv.py               cross-validation driver
-  paths.py            ELEVCOMP_ROOT / _DATA_ROOT / _EXPERIMENT resolution
-configs/            cv_resnet34.toml (paper settings), single_run.toml, ablations.toml
-scripts/            training entry points; eval/ holds the analysis tools
-examples/           end-to-end demo and sample data
+elevcomp/               library — imported, not executed
+  data/                   dataset generation from TartanGround
+    depth.py                depth images -> robot-centric point clouds
+    raster.py               point clouds -> elevation grids
+    groundtruth.py          global scene cloud -> dense reference
+    io.py                   sample serialisation
+  dataset.py              ElevationDataset, augmentations (incl. ray-cone)
+  model.py                U-Net with ResNet-34 encoder and beta-NLL head
+  losses.py               masked L1 and beta-NLL
+  inference.py            single-pass beta-NLL and 8x D4 TTA
+  metrics.py              MAE / RMSE / AbsRel / masked SSIM, in metres
+  calibration.py          sparsification, AUSE, coverage@1-sigma
+  traversability.py       slope, traversability, sigma gate, false-safe rate
+  folds.py                environment discovery and fold construction
+  cv.py                   cross-validation driver
+  paths.py                ELEVCOMP_ROOT / _DATA_ROOT / _EXPERIMENT resolution
+configs/default.toml    training settings used in the paper
+scripts/                the seven entry points of the pipeline
+examples/               end-to-end demo and sample data
+docs/DATASET.md         how to obtain and regenerate the data
 ```
 
 ---

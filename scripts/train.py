@@ -7,28 +7,29 @@ Fold design (leave-one-environment-out):
                VAL   = last (sorted) trajectory of each remaining environment
                TRAIN = all other trajectories of the remaining environments
 
-Everything needed for the paper is persisted per experiment — see the
-auto-generated README.md inside the experiment directory and EXPERIMENTS.md.
+Holding out a whole environment, rather than random samples, is what makes the
+reported error a measure of generalisation to unseen terrain. Each experiment
+directory keeps everything needed to reproduce its numbers, including an
+auto-generated README with a snippet for loading the predictions.
 
 Usage:
     # new experiment (trains all 5 folds sequentially, then evaluates + aggregates)
-    python run_cv_experiment.py --name unet_beta05
+    python scripts/train.py --name resnet34
 
-    # run a subset of folds (e.g. parallel across two GPUs)
-    CUDA_VISIBLE_DEVICES=0 python run_cv_experiment.py --exp_dir runs/cv_unet_beta05_x --folds 0 1 2
-    CUDA_VISIBLE_DEVICES=1 python run_cv_experiment.py --exp_dir runs/cv_unet_beta05_x --folds 3 4
+    # run a subset of folds, e.g. in parallel across two GPUs
+    CUDA_VISIBLE_DEVICES=0 python scripts/train.py --exp_dir runs/cv_resnet34_x --folds 0 1 2
+    CUDA_VISIBLE_DEVICES=1 python scripts/train.py --exp_dir runs/cv_resnet34_x --folds 3 4
 
     # re-run only evaluation / only the cross-fold summary
-    python run_cv_experiment.py --exp_dir runs/cv_unet_beta05_x --stage eval
-    python run_cv_experiment.py --exp_dir runs/cv_unet_beta05_x --stage aggregate
+    python scripts/train.py --exp_dir runs/cv_resnet34_x --stage eval
+    python scripts/train.py --exp_dir runs/cv_resnet34_x --stage aggregate
 
-    # fast end-to-end smoke test (12 files per trajectory, marked _DEBUG)
-    python run_cv_experiment.py --name smoke --debug 12 --epochs 2
+    # fast smoke test of the whole pipeline (12 files per trajectory)
+    python scripts/train.py --name smoke --debug 12 --epochs 2
 
-Hyper-parameters come from configs/cv_resnet34.toml (configs/single_run.toml belongs to the
-scripts/train_single.py); CLI overrides (--model, --epochs, --aug_ray_p, ...) are
-allowed only when creating a new experiment — afterwards the config is frozen
-in experiment.json. Interrupted folds resume automatically from their last.pth.
+Hyper-parameters come from configs/default.toml. CLI overrides (--epochs,
+--aug_ray_p, ...) apply only when creating a new experiment — afterwards the
+config is frozen in experiment.json. Interrupted folds resume from last.pth.
 """
 import argparse
 import json
@@ -66,8 +67,6 @@ def parse_cli():
 
     # Hyper-parameter overrides — allowed only for NEW experiments.
     hp = p.add_argument_group('config overrides (new experiments only)')
-    hp.add_argument('--model', choices=['pconv', 'unet', 'attunet', 'unet_pytorch',
-                                        'segformer'])
     hp.add_argument('--epochs', type=int)
     hp.add_argument('--batch_size', type=int)
     hp.add_argument('--lr', type=float)

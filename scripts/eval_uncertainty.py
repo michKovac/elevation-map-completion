@@ -16,8 +16,8 @@ TTA uncertainty (D4 self-ensemble):
     Shanmugam et al., ICCV 2021.  https://arxiv.org/abs/2011.11156
 
 Usage:
-    python tools/eval_uncertainty.py --checkpoint runs/unet_xxx/best.pth
-    python tools/eval_uncertainty.py --checkpoint runs/unet_xxx/best.pth --split test --n_samples 12
+    python scripts/eval_uncertainty.py --checkpoint runs/unet_xxx/best.pth
+    python scripts/eval_uncertainty.py --checkpoint runs/unet_xxx/best.pth --split test --n_samples 12
 """
 import argparse
 import json
