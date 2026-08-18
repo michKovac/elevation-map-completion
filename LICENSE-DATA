@@ -4,7 +4,7 @@ https://creativecommons.org/licenses/by/4.0/
 Applies to:
   - examples/sample/*.npz      elevation samples derived from TartanGround
   - released model weights     (GitHub Releases / Zenodo)
-  - documentation (README.md, docs/) and figures
+  - documentation (README.md, docs/) including the figures in docs/figures/
 
 These files are derivative works of the TartanGround dataset, which is licensed
 under CC BY 4.0 by its authors (https://tartanair.org/tartanground/). Attribution

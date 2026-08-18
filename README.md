@@ -1,7 +1,20 @@
-# Elevation Map Completion
+<h1 align="center">Elevation Map Completion</h1>
 
-Robot-centric elevation map completion with sensor-geometry-aware augmentation and
-heteroscedastic uncertainty estimation.
+<p align="center">
+  <em>Robot-centric elevation map completion with sensor-geometry-aware<br>
+  augmentation and heteroscedastic uncertainty estimation</em>
+</p>
+
+<p align="center">
+  <img alt="Code license: MIT" src="https://img.shields.io/badge/code-MIT-blue.svg">
+  <img alt="Data license: CC BY 4.0" src="https://img.shields.io/badge/data-CC%20BY%204.0-blue.svg">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.4%2B-ee4c2c.svg">
+</p>
+
+<p align="center">
+  <img src="docs/figures/pipeline.png" alt="Method overview: depth cameras to a completed elevation map with per-cell uncertainty" width="100%">
+</p>
 
 Elevation maps built from onboard depth sensing are full of holes: occlusions, grazing
 incidence and limited field of view leave 55–75 % of a 50 × 50 m robot-centric window
@@ -60,6 +73,11 @@ rectangular masking, the holes it creates share the geometry of real sensor fail
 is applied on the raw arrays before normalisation and padding so the physical sensor
 origin stays at the image centre.
 
+<p align="center">
+  <img src="docs/figures/ray_augmentation.png" alt="Ray-cone augmentation removing one to three angular sectors from the input" width="92%">
+</p>
+<p align="center"><sub>Ray-cone augmentation: angular sectors removed from the input, as a dropped camera or an occluder would.</sub></p>
+
 **Uncertainty** uses a β-NLL head (Seitzer et al., ICLR 2022) with β = 0.5, which avoids
 the degenerate high-variance solution of plain Gaussian NLL. Training runs 100 epochs of
 masked L1 before the NLL term is switched on. A D4 test-time-augmentation ensemble is
@@ -88,6 +106,11 @@ improvement** over the best classical baseline.
 | Navier–Stokes | 5.251 ± 1.932 |
 | **U-Net (ResNet-34), ours** | **2.855 ± 0.819** |
 
+<p align="center">
+  <img src="docs/figures/qualitative.png" alt="Completion results across the five held-out environments" width="88%">
+</p>
+<p align="center"><sub>One held-out sample per environment: sparse input, composite output, ground truth, absolute error and predicted σ. Uncertainty concentrates on vegetation and building edges — where the error actually is.</sub></p>
+
 **Architecture does not decide.** The paper also trains a custom U-Net, an Attention
 U-Net and a SegFormer MiT-B2 under the same protocol; all four land within 2.85–2.96 m
 hole RMSE and a trajectory-level paired Wilcoxon test (n = 25) finds no significant
@@ -110,6 +133,11 @@ for safety: σ̂ ≤ 1 m gives a false-safe rate of 0.292 over 57.6 % of the are
 gives 0.134 over 32.1 %. Note that 71.6 ± 8.6 % of evaluated hole cells are traversable in
 the ground truth, so accuracy sits below the majority-class rate — the false-safe rate is
 the metric that matters, and a trivial always-safe classifier would score 1.0 on it.
+
+<p align="center">
+  <img src="docs/figures/traversability.png" alt="From partial input to an uncertainty-gated traversability decision" width="100%">
+</p>
+<p align="center"><sub>Green traversable, red not. The σ-gate turns cells the model is unsure about red, trading assessed area for a lower false-safe rate — this is what <code>examples/end_to_end.py</code> reproduces on a single sample.</sub></p>
 
 **Cost** (RTX 5090, FP32, batch 1, input 2 × 256 × 256):
 
@@ -225,6 +253,7 @@ scripts/build_dataset.py   TartanGround -> our dataset (--download fetches the s
 scripts/train.py           5-fold training with per-fold evaluation
 examples/end_to_end.py     one sample -> completion, sigma, traversability
 docs/DATASET.md            how to obtain and regenerate the data
+docs/figures/              figures from the paper
 ```
 
 ---
@@ -260,8 +289,9 @@ uncertainty (Shanmugam et al., ICCV 2021), and
 
 ## License
 
-Code is MIT (`LICENSE`). Sample data, released weights and documentation are CC BY 4.0
-(`LICENSE-DATA`), as derivatives of the CC BY 4.0 TartanGround dataset.
+Code is MIT (`LICENSE`). Sample data, released weights, documentation and the figures in
+`docs/figures/` are CC BY 4.0 (`LICENSE-DATA`), as derivatives of the CC BY 4.0
+TartanGround dataset.
 
 Funded by the EU NextGenerationEU through the Recovery and Resilience Plan for Slovakia
 under project No. 09I05-03-V02-00039.
