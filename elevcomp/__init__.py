@@ -1,19 +1,16 @@
 """
-Core library for elevation map completion.
+Elevation map completion — reference implementation.
 
-Importable modules (no entry points here — see repository root for runnable
-scripts and tools/ for standalone analyses):
+    data          building our dataset from TartanGround depth and scene clouds
+    dataset       sample loading, normalisation and the ray-cone augmentation
+    model         U-Net with a ResNet-34 encoder and a log-variance head
+    losses        masked L1 and beta-NLL with hole weighting
+    training      training and validation epoch loops, checkpointing
+    inference     single-pass beta-NLL and D4 test-time-augmentation prediction
+    metrics       MAE / RMSE / AbsRel / masked SSIM, in metres
+    calibration   sparsification, AUSE, coverage@1-sigma
+    traversability  slope, traversability, uncertainty gate, false-safe rate
+    paths         where data, runs and configuration live
 
-    dataset      — ElevationDataset, dataloaders, ray-cone augmentation
-    model        — PConvUNet / SimpleUNet / AttentionUNet + uncertainty heads
-    losses       — masked L1 / β-NLL elevation loss
-    metrics      — MAE / RMSE / AbsRel / masked SSIM (denormalized metres)
-    training     — train/eval epoch loops, checkpoint helpers
-    inference    — single-pass (β-NLL) and D4 TTA ensemble prediction
-    baselines    — classical hole-filling baselines (nearest, linear, IDW, …)
-    folds        — environment discovery + leave-one-environment-out folds
-    calibration  — uncertainty calibration (sparsification, AUSE, coverage)
-    figures      — shared matplotlib figures (training vis, calibration, summary)
-    cv           — cross-validation experiment driver (train/eval/aggregate)
-    utils        — seeding, environment info, CSV/statistics helpers
+Runnable entry points are scripts/ and examples/.
 """

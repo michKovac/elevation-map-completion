@@ -11,7 +11,14 @@ Coverage @1σ: for a well-calibrated Gaussian, σ > |error| for ≈68 % of pixel
 """
 import numpy as np
 
-from .utils import pearson
+
+def pearson(x: np.ndarray, y: np.ndarray) -> float:
+    """Pearson correlation without RuntimeWarnings on (near-)constant inputs."""
+    x = x.astype(np.float64) - x.mean()
+    y = y.astype(np.float64) - y.mean()
+    den = np.sqrt((x * x).sum() * (y * y).sum())
+    return float((x * y).sum() / den) if den > 1e-12 else float('nan')
+
 
 SPARS_FRACS = np.linspace(0.0, 0.95, 20)   # fraction of pixels removed
 MIN_HOLE_PX = 20                           # min hole pixels for calibration stats

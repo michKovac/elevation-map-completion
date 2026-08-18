@@ -1,14 +1,10 @@
 # ==============================================================================
-# Configuration of the 5-fold leave-one-environment-out training run
-# (scripts/train.py). Defaults are the settings used in the paper.
+# Defaults for scripts/train.py — the settings used in the paper.
 #
-# Data and splits are not configured here. Folds are built automatically from
-# --data_root (default: $ELEVCOMP_DATA_ROOT or datasets/elevation_dataset) and
-# the normalisation statistics are computed from the training files of each fold.
-# Training always starts from scratch; an interrupted fold resumes from last.pth.
-#
-# Creating an experiment freezes this file into <exp_dir>/experiment.json, so
-# later edits here do not affect experiments that are already running.
+# The data location is not configured here: it comes from --data_root, or
+# $ELEVCOMP_DATA_ROOT, or datasets/elevation_dataset. Normalisation statistics
+# are computed from the training split. Any value below can be overridden on the
+# command line, and the effective config is stored inside the checkpoint.
 # ==============================================================================
 
 # -- Model ---------------------------------------------------------------------
@@ -48,13 +44,6 @@ pad_to            = 256      # 251x251 inputs are centred in a 256x256 canvas
 fix_mask_rotation = false    # legacy flag for datasets generated before the
                              # mask-orientation fix; leave false
 
-# -- Output and visualisation --------------------------------------------------
-save_dir   = "./runs"   # experiments are created as runs/cv_<name>_<timestamp>/
-save_every = 50         # write epoch_NNN.pth every N epochs
-vis_every  = 25         # write validation images every N epochs
-n_vis      = 8          # samples per figure (also for test_samples.png)
-
 # -- System --------------------------------------------------------------------
 num_workers = 8
-amp         = true      # automatic mixed precision
-amp_dtype   = "fp16"    # "fp16" (default, with grad scaler) | "bf16" (no scaler)
+amp         = true      # automatic mixed precision (CUDA only)

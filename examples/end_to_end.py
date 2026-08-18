@@ -9,7 +9,7 @@ End-to-end demonstration: one raw sample to a traversability decision.
 Writes a six-panel figure and prints the metrics on hole cells, i.e. the cells
 the model had to invent and where the decision actually matters.
 
-    python examples/end_to_end.py --checkpoint runs/cv_.../fold_0_*/best.pth
+    python examples/end_to_end.py --checkpoint runs/resnet34_<ts>/best.pth
     python examples/end_to_end.py --checkpoint <ckpt> --sample examples/sample/<file>.npz
 
 With no --sample it uses the first file in examples/sample/.

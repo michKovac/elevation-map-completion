@@ -1,118 +1,194 @@
 #!/usr/bin/env python3
 """
-Cross-environment 5-fold experiment for elevation map completion.
+Example training run for elevation map completion.
 
-Fold design (leave-one-environment-out):
-    fold k  →  TEST  = all trajectories of environment k (never seen in training)
-               VAL   = last (sorted) trajectory of each remaining environment
-               TRAIN = all other trajectories of the remaining environments
+A compact, readable demonstration of the method rather than the experiment
+harness of the paper: it trains one model on one data root with the masked
+beta-NLL loss and the ray-cone augmentation, and reports hole-region error and
+uncertainty calibration on the held-out split.
 
-Holding out a whole environment, rather than random samples, is what makes the
-reported error a measure of generalisation to unseen terrain. Each experiment
-directory keeps everything needed to reproduce its numbers, including an
-auto-generated README with a snippet for loading the predictions.
+The paper trains this same model five times in a leave-one-environment-out
+protocol and reports the mean; pointing --data_root at a single environment
+directory reproduces one such run, pointing it at the dataset root trains on
+everything with a random split.
 
-Usage:
-    # new experiment (trains all 5 folds sequentially, then evaluates + aggregates)
-    python scripts/train.py --name resnet34
+    # quick check that the pipeline runs (minutes, CPU is enough)
+    python scripts/train.py --epochs 2 --warmup 1 --limit 200
 
-    # run a subset of folds, e.g. in parallel across two GPUs
-    CUDA_VISIBLE_DEVICES=0 python scripts/train.py --exp_dir runs/cv_resnet34_x --folds 0 1 2
-    CUDA_VISIBLE_DEVICES=1 python scripts/train.py --exp_dir runs/cv_resnet34_x --folds 3 4
+    # a real run on one environment
+    python scripts/train.py --data_root datasets/elevation_dataset/OldTownSummer
 
-    # re-run only evaluation / only the cross-fold summary
-    python scripts/train.py --exp_dir runs/cv_resnet34_x --stage eval
-    python scripts/train.py --exp_dir runs/cv_resnet34_x --stage aggregate
-
-    # fast smoke test of the whole pipeline (12 files per trajectory)
-    python scripts/train.py --name smoke --debug 12 --epochs 2
-
-Hyper-parameters come from configs/default.toml. CLI overrides (--epochs,
---aug_ray_p, ...) apply only when creating a new experiment — afterwards the
-config is frozen in experiment.json. Interrupted folds resume from last.pth.
+Writes runs/<name>_<timestamp>/ containing best.pth and last.pth. Checkpoints
+carry their own config and normalisation statistics, so examples/end_to_end.py
+needs nothing else.
 """
 import argparse
 import json
-import sys
+import time
+import tomllib
+from datetime import datetime
 from pathlib import Path
 
-from elevcomp.cv import HPARAM_OVERRIDES, create_experiment, run_experiment
+import numpy as np
+import torch
+from torch.amp import GradScaler
+
+from elevcomp.calibration import MIN_HOLE_PX
+from elevcomp.dataset import ElevationDataset, get_dataloaders
+from elevcomp.inference import nll_predict
+from elevcomp.losses import ElevationLoss
+from elevcomp.model import build_model, count_parameters
+from elevcomp.paths import CONFIG_DIR, data_root, runs_dir
+from elevcomp.training import evaluate, make_state, save_checkpoint, train_one_epoch
+from elevcomp.utils import seed_everything
 
 
-def _bool(s: str) -> bool:
-    if s.lower() in ('1', 'true', 'yes', 'on'):
-        return True
-    if s.lower() in ('0', 'false', 'no', 'off'):
-        return False
-    raise argparse.ArgumentTypeError(f'expected true/false, got {s!r}')
-
-
-def parse_cli():
-    p = argparse.ArgumentParser(description=__doc__.split('\n')[1],
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--name', help='experiment name (creates a new experiment)')
-    p.add_argument('--exp_dir', help='existing experiment directory (continue)')
-    p.add_argument('--data_root',
-                   default=str(Path(__file__).parent / '../datasets/elevation_dataset'),
-                   help='dataset root containing the environment directories')
-    p.add_argument('--folds', type=int, nargs='+',
-                   help='subset of folds to run (default: all)')
-    p.add_argument('--stage', default='all',
-                   choices=['all', 'train', 'eval', 'aggregate'])
+    p.add_argument('--data_root', default=None,
+                   help='dataset root or one environment directory '
+                        '(default: $ELEVCOMP_DATA_ROOT or datasets/elevation_dataset)')
+    p.add_argument('--name', default='resnet34', help='run name')
+    p.add_argument('--out', default=None, help='output directory (default: runs/<name>_<ts>)')
     p.add_argument('--seed', type=int, default=42)
-    p.add_argument('--val_traj_per_env', type=int, default=1)
-    p.add_argument('--debug', type=int, default=0, metavar='N',
-                   help='use only N files per trajectory (smoke test, marks _DEBUG)')
-    p.add_argument('--num_workers', type=int)
+    p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Hyper-parameter overrides — allowed only for NEW experiments.
-    hp = p.add_argument_group('config overrides (new experiments only)')
-    hp.add_argument('--epochs', type=int)
-    hp.add_argument('--batch_size', type=int)
-    hp.add_argument('--lr', type=float)
-    hp.add_argument('--weight_decay', type=float)
-    hp.add_argument('--grad_clip', type=float)
-    hp.add_argument('--layer_size', type=int)
-    hp.add_argument('--base_channels', type=int)
-    hp.add_argument('--w_valid', type=float)
-    hp.add_argument('--w_hole', type=float)
-    hp.add_argument('--uncertainty', type=_bool, metavar='true|false')
-    hp.add_argument('--uncertainty_beta', type=float)
-    hp.add_argument('--uncertainty_warmup', type=int)
-    hp.add_argument('--aug_hflip_p', type=float)
-    hp.add_argument('--aug_vflip_p', type=float)
-    hp.add_argument('--aug_rot90_p', type=float)
-    hp.add_argument('--aug_ray_p', type=float)
-    hp.add_argument('--aug_ray_n_max', type=int)
-    hp.add_argument('--aug_ray_angle_deg', type=float, nargs=2,
-                    metavar=('MIN', 'MAX'))
+    o = p.add_argument_group('config overrides (defaults come from configs/default.toml)')
+    o.add_argument('--epochs', type=int)
+    o.add_argument('--batch_size', type=int)
+    o.add_argument('--lr', type=float)
+    o.add_argument('--warmup', type=int, dest='uncertainty_warmup',
+                   help='epochs of plain L1 before beta-NLL is enabled')
+    o.add_argument('--aug_ray_p', type=float, help='ray-cone augmentation probability')
+    o.add_argument('--num_workers', type=int)
+    p.add_argument('--limit', type=int, default=0,
+                   help='use at most N samples in total (smoke tests)')
     return p.parse_args()
 
 
+def load_config(args) -> dict:
+    with open(CONFIG_DIR / 'default.toml', 'rb') as f:
+        cfg = tomllib.load(f)
+    for key in ('epochs', 'batch_size', 'lr', 'uncertainty_warmup', 'aug_ray_p',
+                'num_workers'):
+        value = getattr(args, key, None)
+        if value is not None:
+            cfg[key] = value
+    cfg['data_dir'] = str(Path(args.data_root).expanduser() if args.data_root else data_root())
+    return cfg
+
+
+def hole_metrics(model, dataset, cfg, stats, device) -> dict:
+    """
+    Hole-region error and uncertainty calibration on the held-out split.
+
+    Everything is measured in metres on the cells the model had to invent:
+    unobserved by the cameras but covered by valid ground truth.
+    """
+    model.eval()
+    mean, std = stats['mean'], stats['std']
+    size = 251
+    pad = (cfg['pad_to'] - size) // 2
+    crop = slice(pad, pad + size)
+
+    sq_err, n_px, covered, errs, sigmas = 0.0, 0, 0, [], []
+    loader = torch.utils.data.DataLoader(dataset, batch_size=max(cfg['batch_size'] // 2, 4),
+                                         shuffle=False, num_workers=cfg['num_workers'])
+
+    for inp, gt, gt_mask in loader:
+        inp, gt, gt_mask = inp.to(device), gt.to(device), gt_mask.to(device)
+        pred, sigma = nll_predict(model, inp, cfg.get('uncertainty', False))
+
+        hole = ((gt_mask > 0.5) & (inp[:, 1:2] < 0.5))[:, 0, crop, crop].cpu().numpy()
+        err = ((pred - gt)[:, 0, crop, crop].cpu().numpy() * std)
+        sq_err += float((err[hole] ** 2).sum())
+        n_px += int(hole.sum())
+
+        if sigma is not None:
+            sig = sigma[:, 0, crop, crop].cpu().numpy() * std
+            a, s = np.abs(err[hole]), sig[hole]
+            covered += int((a <= s).sum())
+            if len(a) > MIN_HOLE_PX:
+                errs.append(a[::200])
+                sigmas.append(s[::200])
+
+    out = {'hole_rmse_m': float(np.sqrt(sq_err / max(n_px, 1))), 'hole_pixels': n_px}
+    if errs:
+        a, s = np.concatenate(errs), np.concatenate(sigmas)
+        out['coverage_1sigma'] = covered / max(n_px, 1)
+        out['corr_sigma_error'] = float(np.corrcoef(a, s)[0, 1])
+    return out
+
+
 def main():
-    args = parse_cli()
-    if bool(args.name) == bool(args.exp_dir):
-        sys.exit('Provide exactly one of --name (new) or --exp_dir (continue).')
+    args = parse_args()
+    seed_everything(args.seed)
+    cfg = load_config(args)
+    device = torch.device(args.device)
 
-    overrides = {k: getattr(args, k) for k in HPARAM_OVERRIDES
-                 if getattr(args, k) is not None}
+    out_dir = Path(args.out) if args.out else \
+        runs_dir() / f"{args.name}_{datetime.now():%Y%m%d_%H%M%S}"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.exp_dir:
-        exp_dir = Path(args.exp_dir)
-        if not (exp_dir / 'experiment.json').exists():
-            sys.exit(f'{exp_dir} is not an experiment directory (no experiment.json).')
-        if overrides:
-            sys.exit(f'Hyper-parameter overrides {sorted(overrides)} are only '
-                     f'allowed for new experiments — this one is frozen in '
-                     f'experiment.json.')
-    else:
-        exp_dir = create_experiment(
-            name=args.name, overrides=overrides, data_root=args.data_root,
-            seed=args.seed, val_traj_per_env=args.val_traj_per_env,
-            debug_limit=args.debug, command=' '.join(sys.argv))
+    train_loader, val_loader, test_ds, stats, _ = get_dataloaders(cfg)
+    if args.limit:
+        test_ds = torch.utils.data.Subset(test_ds, range(min(args.limit, len(test_ds))))
+    print(f'data      : {cfg["data_dir"]}')
+    print(f'samples   : {len(train_loader.dataset)} train / '
+          f'{len(val_loader.dataset)} val / {len(test_ds)} test')
 
-    run_experiment(exp_dir, folds_sel=args.folds, stage=args.stage,
-                   num_workers=args.num_workers)
+    model = build_model(cfg).to(device)
+    print(f'model     : U-Net ResNet-34, {count_parameters(model) / 1e6:.2f}M parameters')
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg['lr'],
+                                  weight_decay=cfg['weight_decay'])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=cfg['epochs'], eta_min=cfg['lr'] * 0.01)
+    loss_fn = ElevationLoss(cfg['w_valid'], cfg['w_hole'], cfg['uncertainty_beta'])
+
+    use_amp = cfg.get('amp', True) and device.type == 'cuda'
+    scaler = GradScaler('cuda') if use_amp else None
+    amp_dtype = torch.float16 if use_amp else None
+
+    warmup = cfg.get('uncertainty_warmup', 0)
+    print(f'schedule  : {warmup} epochs L1 warmup, then beta-NLL '
+          f'(beta={cfg["uncertainty_beta"]}) to epoch {cfg["epochs"]}\n')
+
+    best = float('inf')
+    for epoch in range(1, cfg['epochs'] + 1):
+        # the log-variance head is only supervised after the warmup; before it
+        # the loss falls back to plain masked L1
+        unc = cfg['uncertainty'] and epoch > warmup
+
+        t0 = time.time()
+        tr_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, scaler,
+                                  device, None, epoch, cfg['grad_clip'], unc, amp_dtype)
+        val = evaluate(model, val_loader, loss_fn, device, stats, unc)
+        scheduler.step()
+
+        tag = 'beta-NLL' if unc else 'L1      '
+        print(f'epoch {epoch:3d}/{cfg["epochs"]}  {tag}  '
+              f'train {tr_loss:7.4f}  val {val["loss"]:7.4f}  '
+              f'RMSE {val.get("rmse", float("nan")):6.3f} m  ({time.time() - t0:.0f}s)',
+              flush=True)
+
+        state = make_state(epoch, model, optimizer, scheduler, scaler, best, stats, cfg)
+        save_checkpoint(state, out_dir / 'last.pth')
+        if val.get('rmse', float('inf')) < best:
+            best = val['rmse']
+            save_checkpoint(state, out_dir / 'best.pth')
+
+    print('\nheld-out split, hole cells only:')
+    ckpt = torch.load(out_dir / 'best.pth', map_location=device, weights_only=False)
+    model.load_state_dict(ckpt['model'])
+    results = hole_metrics(model, test_ds, cfg, stats, device)
+    for k, v in results.items():
+        print(f'  {k:18s} {v:.4f}' if isinstance(v, float) else f'  {k:18s} {v}')
+
+    json.dump({'config': cfg, 'stats': stats, 'test': results},
+              open(out_dir / 'results.json', 'w'), indent=2)
+    print(f'\nSaved {out_dir}')
 
 
 if __name__ == '__main__':

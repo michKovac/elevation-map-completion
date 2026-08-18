@@ -56,3 +56,39 @@ def test_hole_weighting_dominates_the_loss():
 
     assert (loss(err_in_hole, gt, gt_mask, partial_mask)
             > loss(err_in_obs, gt, gt_mask, partial_mask))
+
+
+def test_traversability_gate_is_conservative():
+    """The uncertainty gate may only remove safe cells, never create them."""
+    import numpy as np
+
+    from elevcomp.traversability import (NON_TRAVERSABLE, TRAVERSABLE, apply_sigma_gate,
+                                         slope_deg, traversability)
+
+    flat = np.zeros((20, 20), np.float32)
+    valid = np.ones((20, 20), bool)
+    trav = traversability(slope_deg(flat, valid), 25.0)
+    assert (trav[1:-1, 1:-1] == TRAVERSABLE).all()
+
+    gated = apply_sigma_gate(trav, np.full((20, 20), 2.0, np.float32), tau=1.0)
+    assert (gated[1:-1, 1:-1] == NON_TRAVERSABLE).all()
+    assert ((gated == TRAVERSABLE) <= (trav == TRAVERSABLE)).all()
+
+
+def test_elevation_rasterises_to_the_paper_grid():
+    """50 x 50 m at 0.2 m/cell is the 251 x 251 grid the model expects."""
+    import numpy as np
+
+    from elevcomp.data.raster import apply_axis_mapping, grid_shape, rasterize_elevation
+
+    bounds = [-25, 25, -25, 25, -25, 25]
+    assert grid_shape(bounds, 0.2) == (251, 251)
+
+    # a single point at the origin lands in the centre cell and nowhere else
+    elev, mask = rasterize_elevation(np.array([[0.0, 0.0, 1.5]], np.float32), bounds, 0.2)
+    assert mask.sum() == 1
+    assert np.isclose(elev[mask][0], 1.5)
+
+    pts = np.array([[1.0, 2.0, 3.0]], np.float32)
+    assert np.array_equal(apply_axis_mapping(pts, 'yxz_neg'),
+                          np.array([[2.0, 1.0, -3.0]], np.float32))

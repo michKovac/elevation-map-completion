@@ -32,12 +32,20 @@ Reference implementation for:
 
 ## Scope
 
-This repository is the completion pipeline itself: how to build our dataset from
-TartanGround, how the model is trained and run, and how its output becomes an
-uncertainty-aware traversability decision. The ablations, classical baselines and
-architecture comparisons reported in the paper are experiments around that pipeline and
-are not reproduced here — the numbers below are stated as results, not as things this
-code recomputes.
+This repository holds the methods the paper contributes and one worked example that
+runs them end to end:
+
+- how our dataset is built from TartanGround depth images and scene point clouds
+- the **ray-cone augmentation** that imitates sensor dropout
+- the **masked β-NLL loss** that weights the holes and learns a per-cell variance
+- **uncertainty estimation**, single-pass and as a D4 test-time ensemble
+- **uncertainty-gated traversability**
+
+It is a reference implementation, not the experiment harness. The paper trains this
+model five times in a leave-one-environment-out protocol and compares it against
+classical baselines, other architectures and a set of ablations; none of that machinery
+is here. `scripts/train.py` is one example run of the method, and the numbers below are
+stated as published results rather than as something this code recomputes.
 
 ---
 
@@ -47,16 +55,16 @@ Three commands cover it, backed by the library.
 
 | # | Stage | Where |
 |---|---|---|
-| 1 | Build our dataset from TartanGround | `scripts/build_dataset.py` |
-| 2 | Preprocessing, normalisation, folds | `elevcomp/dataset.py`, `elevcomp/folds.py` |
-| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train.py` |
+| 1 | Build our dataset from TartanGround | `scripts/build_dataset.py`, `elevcomp/data/` |
+| 2 | Preprocessing and normalisation | `elevcomp/dataset.py` |
+| 3 | Training and inference (ResNet-34 U-Net) | `scripts/train.py`, `elevcomp/model.py` |
 | 4 | Ray-cone augmentation | `elevcomp/dataset.py` |
-| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `elevcomp/inference.py`, `elevcomp/calibration.py` |
+| 5 | Uncertainty estimation (β-NLL, D4 TTA) | `elevcomp/losses.py`, `elevcomp/inference.py` |
 | 6 | Traversability prediction | `elevcomp/traversability.py` |
 | 7 | End-to-end example | `examples/end_to_end.py` |
 
-Training evaluates each fold as it goes, including the uncertainty calibration
-(AUSE, coverage@1σ, β-NLL vs TTA), so there is no separate evaluation step to run.
+The example run reports hole-region RMSE and uncertainty calibration on its held-out
+split, so there is no separate evaluation step.
 
 ---
 
@@ -205,52 +213,47 @@ Point the code at the result with `ELEVCOMP_DATA_ROOT`, or pass `--data_root`.
 python scripts/build_dataset.py --tartanground_root /data/tartanground --download
 export ELEVCOMP_DATA_ROOT=$PWD/datasets/elevation_dataset
 
-# 2. train — 5-fold leave-one-environment-out, metrics written per fold
-python scripts/train.py --name resnet34
+# 2. train one model — the example experiment
+python scripts/train.py --data_root $ELEVCOMP_DATA_ROOT/OldTownSummer
 
 # 3. one sample from input to gated traversability decision
-python examples/end_to_end.py --checkpoint runs/cv_resnet34_<ts>/fold_0_ForestEnv/best.pth
+python examples/end_to_end.py --checkpoint runs/resnet34_<ts>/best.pth
 ```
 
-A two-epoch smoke test of the whole pipeline, before committing to a real run:
+Before committing to a real run, a few-minute version of the same thing:
 
 ```bash
-python scripts/train.py --name smoke --debug 12 --epochs 2
+python scripts/train.py --epochs 2 --warmup 1 --batch_size 8
 ```
 
-Training takes roughly one day per fold on a single modern GPU at the paper settings
-(200 epochs, batch 64). Folds are independent, so they can be split across GPUs with
-`--folds`.
-
-**Determinism note.** Tools that re-run trained folds and compare quantities near a
-threshold (for example the σ > |e| coverage counter) must set
-`torch.backends.cudnn.benchmark = True`, matching `elevcomp/cv.py`. A different kernel
-choice shifts coverage by up to 2e-4. RMSE-style metrics are unaffected.
+At the paper settings (200 epochs, batch 64) one run takes roughly a day on a modern
+GPU. Pointing `--data_root` at a single environment reproduces one fold of the
+leave-one-environment-out protocol; pointing it at the dataset root trains on everything
+with a random split, which is faster to try but not what the paper reports.
 
 ---
 
 ## Layout
 
 ```
-elevcomp/               library — imported, not executed
-  data/                   dataset generation from TartanGround
-    depth.py                depth images -> robot-centric point clouds
-    raster.py               point clouds -> elevation grids
-    groundtruth.py          global scene cloud -> dense reference
-    io.py                   sample serialisation
-  dataset.py              ElevationDataset, augmentations (incl. ray-cone)
-  model.py                U-Net with ResNet-34 encoder and beta-NLL head
-  losses.py               masked L1 and beta-NLL
-  inference.py            single-pass beta-NLL and 8x D4 TTA
-  metrics.py              MAE / RMSE / AbsRel / masked SSIM, in metres
-  calibration.py          sparsification, AUSE, coverage@1-sigma
-  traversability.py       slope, traversability, sigma gate, false-safe rate
-  folds.py                environment discovery and fold construction
-  cv.py                   cross-validation driver
-  paths.py                ELEVCOMP_ROOT / _DATA_ROOT / _EXPERIMENT resolution
-configs/default.toml    training settings used in the paper
+elevcomp/                  library — imported, not executed
+  data/                      building our dataset from TartanGround
+    depth.py                   depth images -> robot-centric point clouds
+    raster.py                  point clouds -> elevation grids
+    groundtruth.py             global scene cloud -> dense reference
+    io.py                      sample serialisation
+  dataset.py                 loading, normalisation, ray-cone augmentation
+  model.py                   U-Net with ResNet-34 encoder and log-variance head
+  losses.py                  masked L1 and beta-NLL with hole weighting
+  training.py                training and validation epoch loops
+  inference.py               single-pass beta-NLL and 8x D4 TTA
+  metrics.py                 MAE / RMSE / AbsRel / masked SSIM, in metres
+  calibration.py             sparsification, AUSE, coverage@1-sigma
+  traversability.py          slope, traversability, sigma gate, false-safe rate
+  paths.py                   where data, runs and configuration live
+configs/default.toml       training settings used in the paper
 scripts/build_dataset.py   TartanGround -> our dataset (--download fetches the source)
-scripts/train.py           5-fold training with per-fold evaluation
+scripts/train.py           the example training run
 examples/end_to_end.py     one sample -> completion, sigma, traversability
 docs/DATASET.md            how to obtain and regenerate the data
 docs/figures/              figures from the paper
