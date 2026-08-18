@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elevcomp"
+version = "1.0.0"
+description = "Robot-centric elevation map completion with sensor-geometry-aware augmentation and heteroscedastic uncertainty estimation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Jozef Goga", email = "jozef.goga@stuba.sk" },
+    { name = "Michal Kovac" },
+    { name = "Martin Dekan" },
+    { name = "Jarmila Pavlovicova" },
+    { name = "Frantisek Duchon", email = "frantisek.duchon@stuba.sk" },
+]
+keywords = [
+    "elevation map completion",
+    "data augmentation",
+    "uncertainty estimation",
+    "traversability",
+    "mobile robots",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "segmentation-models-pytorch>=0.4",
+    "timm>=1.0",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+    "tqdm>=4.66",
+    "tensorboard>=2.17",
+]
+
+[project.optional-dependencies]
+# Needed only to regenerate the dataset from TartanGround (docs/DATASET.md).
+data = [
+    "open3d>=0.18",
+    "opencv-contrib-python>=4.10",
+    "tartanair>=1.0",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.urls]
+# TODO: set once the repository is public
+Repository = "https://github.com/ToBeAdded/elevation-map-completion"
+
+[tool.setuptools.packages.find]
+include = ["elevcomp*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

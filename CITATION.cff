@@ -1,0 +1,164 @@
+cff-version: 1.2.0
+title: >-
+  elevation-map-completion: robot-centric elevation map completion with
+  sensor-geometry-aware augmentation and uncertainty estimation
+message: >-
+  If you use this software or the released model weights, please cite the
+  accompanying paper (preferred-citation) and the TartanGround dataset it is
+  built on (references).
+type: software
+authors:
+  - given-names: Jozef
+    family-names: Goga
+    email: jozef.goga@stuba.sk
+    affiliation: >-
+      Faculty of Electrical Engineering and Information Technology, Slovak
+      University of Technology in Bratislava
+  - given-names: Michal
+    family-names: Kovac
+    affiliation: >-
+      Faculty of Electrical Engineering and Information Technology, Slovak
+      University of Technology in Bratislava
+  - given-names: Martin
+    family-names: Dekan
+    affiliation: >-
+      Faculty of Electrical Engineering and Information Technology, Slovak
+      University of Technology in Bratislava
+  - given-names: Jarmila
+    family-names: Pavlovicova
+    affiliation: >-
+      Faculty of Electrical Engineering and Information Technology, Slovak
+      University of Technology in Bratislava
+  - given-names: Frantisek
+    family-names: Duchon
+    email: frantisek.duchon@stuba.sk
+    affiliation: >-
+      Faculty of Electrical Engineering and Information Technology, Slovak
+      University of Technology in Bratislava
+license: MIT
+# TODO: set once the repository is public
+repository-code: 'https://github.com/ToBeAdded/elevation-map-completion'
+keywords:
+  - elevation map completion
+  - sensor-geometry data augmentation
+  - uncertainty estimation
+  - heteroscedastic regression
+  - traversability
+  - mobile robots
+  - deep learning
+
+preferred-citation:
+  type: article
+  title: >-
+    Robot-Centric Elevation Map Completion with Sensor-Geometry-Aware
+    Augmentation and Uncertainty Estimation
+  authors:
+    - given-names: Jozef
+      family-names: Goga
+    - given-names: Michal
+      family-names: Kovac
+    - given-names: Martin
+      family-names: Dekan
+    - given-names: Jarmila
+      family-names: Pavlovicova
+    - given-names: Frantisek
+      family-names: Duchon
+  journal: Applied Sciences
+  publisher:
+    name: MDPI
+  year: 2026
+  # TODO: fill in volume / issue / article number / doi once assigned by MDPI
+
+references:
+  - type: conference-paper
+    title: >-
+      TartanGround: A Large-Scale Dataset for Ground Robot Perception and
+      Navigation
+    authors:
+      - given-names: Manthan
+        family-names: Patel
+      - given-names: Fan
+        family-names: Yang
+      - given-names: Yuheng
+        family-names: Qiu
+      - given-names: Cesar
+        family-names: Cadena
+      - given-names: Sebastian
+        family-names: Scherer
+      - given-names: Marco
+        family-names: Hutter
+      - given-names: Wenshan
+        family-names: Wang
+    collection-title: >-
+      2025 IEEE/RSJ International Conference on Intelligent Robots and Systems
+      (IROS)
+    year: 2025
+    start: 20524
+    end: 20531
+    doi: 10.1109/IROS60139.2025.11246002
+    notes: Source dataset, licensed CC BY 4.0.
+  - type: conference-paper
+    title: >-
+      On the Pitfalls of Heteroscedastic Uncertainty Estimation with
+      Probabilistic Neural Networks
+    authors:
+      - given-names: Maximilian
+        family-names: Seitzer
+      - given-names: Arash
+        family-names: Tavakoli
+      - given-names: Dimitrije
+        family-names: Antic
+      - given-names: Georg
+        family-names: Martius
+    collection-title: International Conference on Learning Representations (ICLR)
+    year: 2022
+    notes: beta-NLL loss used for the heteroscedastic uncertainty head.
+  - type: conference-paper
+    title: >-
+      What Uncertainties Do We Need in Bayesian Deep Learning for Computer
+      Vision?
+    authors:
+      - given-names: Alex
+        family-names: Kendall
+      - given-names: Yarin
+        family-names: Gal
+    collection-title: Advances in Neural Information Processing Systems (NeurIPS)
+    year: 2017
+    notes: Heteroscedastic aleatoric uncertainty framework.
+  - type: conference-paper
+    title: 'U-Net: Convolutional Networks for Biomedical Image Segmentation'
+    authors:
+      - given-names: Olaf
+        family-names: Ronneberger
+      - given-names: Philipp
+        family-names: Fischer
+      - given-names: Thomas
+        family-names: Brox
+    collection-title: >-
+      Medical Image Computing and Computer-Assisted Intervention (MICCAI)
+    year: 2015
+    doi: 10.1007/978-3-319-24574-4_28
+  - type: conference-paper
+    title: Deep Residual Learning for Image Recognition
+    authors:
+      - given-names: Kaiming
+        family-names: He
+      - given-names: Xiangyu
+        family-names: Zhang
+      - given-names: Shaoqing
+        family-names: Ren
+      - given-names: Jian
+        family-names: Sun
+    collection-title: >-
+      IEEE Conference on Computer Vision and Pattern Recognition (CVPR)
+    year: 2016
+    doi: 10.1109/CVPR.2016.90
+    notes: ResNet-34 encoder of the main model.
+  - type: software
+    title: Segmentation Models Pytorch
+    authors:
+      - given-names: Pavel
+        family-names: Iakubovskii
+    year: 2019
+    repository-code: 'https://github.com/qubvel/segmentation-models-pytorch'
+    license: MIT

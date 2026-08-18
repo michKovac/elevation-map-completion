@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Ablation plan for scripts/run_ablations.py
+#
+# Each [[variant]] becomes one full 5-fold CV experiment named
+# cv_<plan>_<variant>_<timestamp> in runs/. The mapping variant → experiment
+# directory is kept in runs/ablations/<plan>/registry.json, so re-running the
+# plan continues existing experiments instead of duplicating them.
+#
+# Focus: the paper's contributions — (a) ray-cone augmentation,
+# (b) the masked β-NLL loss. Edit freely; keys in [variant.overrides] must be
+# valid keys of the base config (see elevcomp/cv.py HPARAM_OVERRIDES). Every
+# variant starts from configs/cv_resnet34.toml.
+#
+# Compare results afterwards with:
+#   python scripts/eval/compare_experiments.py runs/cv_abl_* --out reports/ablations
+# ─────────────────────────────────────────────────────────────────────────────
+
+[plan]
+name = "abl"
+
+# Applied to EVERY variant: the ResNet-34 U-Net of the paper and the same budget
+# as the main runs (200 epochs = 100 L1 warmup + 100 beta-NLL), so the reference
+# variant (aug_geo_ray + loss_bnll_b05) reproduces the main experiment exactly.
+[plan.defaults]
+model  = "unet_pytorch"
+epochs = 200
+
+# ── (a) Augmentation ablation ─────────────────────────────────────────────────
+
+[[variant]]
+name = "aug_none"
+description = "no augmentation at all"
+[variant.overrides]
+aug_hflip_p = 0.0
+aug_vflip_p = 0.0
+aug_rot90_p = 0.0
+aug_ray_p   = 0.0
+
+[[variant]]
+name = "aug_geo"
+description = "geometric only (flips + rot90)"
+[variant.overrides]
+aug_ray_p = 0.0
+
+[[variant]]
+name = "aug_geo_ray"
+description = "geometric + ray-cone augmentation (our contribution; main setting)"
+[variant.overrides]
+aug_ray_p = 0.25
+
+# ── (b) Loss ablation ─────────────────────────────────────────────────────────
+
+[[variant]]
+name = "loss_l1"
+description = "plain masked L1, no uncertainty head"
+[variant.overrides]
+uncertainty = false
+
+[[variant]]
+name = "loss_bnll_b05"
+description = "β-NLL, β = 0.5 (paper default, Seitzer et al. 2022)"
+[variant.overrides]
+uncertainty_beta = 0.5
+
+[[variant]]
+name = "loss_bnll_b00"
+description = "β = 0 → plain Gaussian NLL (known-unstable reference)"
+[variant.overrides]
+uncertainty_beta = 0.0
+
+[[variant]]
+name = "loss_bnll_b10"
+description = "β = 1 → uniform pixel weighting"
+[variant.overrides]
+uncertainty_beta = 1.0
+
+[[variant]]
+name = "loss_hole_only"
+description = "w_valid = 0 — supervise holes only"
+[variant.overrides]
+w_valid = 0.0
+
+[[variant]]
+name = "loss_uniform"
+description = "w_hole = 0 — no extra hole emphasis"
+[variant.overrides]
+w_hole = 0.0
+w_valid = 1.0

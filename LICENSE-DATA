@@ -1,0 +1,23 @@
+Data license — Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Applies to:
+  - examples/sample/*.npz      elevation samples derived from TartanGround
+  - released model weights     (GitHub Releases / Zenodo)
+  - documentation (README.md, docs/) and figures
+
+These files are derivative works of the TartanGround dataset, which is licensed
+under CC BY 4.0 by its authors (https://tartanair.org/tartanground/). Attribution
+to the original dataset is required and is provided as follows:
+
+  Patel, M.; Yang, F.; Qiu, Y.; Cadena, C.; Scherer, S.; Hutter, M.; Wang, W.
+  "TartanGround: A Large-Scale Dataset for Ground Robot Perception and
+  Navigation." 2025 IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS), 2025, pp. 20524-20531. doi:10.1109/IROS60139.2025.11246002
+
+The TartanGround toolkit (tartanair Python package) is separately licensed MIT
+by Carnegie Mellon University.
+
+When redistributing these files or works derived from them, retain this notice
+and cite both the TartanGround dataset above and the accompanying paper listed
+in CITATION.cff.

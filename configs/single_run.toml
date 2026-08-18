@@ -1,0 +1,56 @@
+# ==============================================================================
+# Single-dataset training (scripts/train_single.py) — development and debugging
+# on one environment. The 5-fold experiment of the paper and the ablations use
+# configs/cv_resnet34.toml, where data_dir and resume do not apply because the
+# folds are built automatically.
+# ==============================================================================
+
+# -- Data ----------------------------------------------------------------------
+data_dir           = "datasets/elevation_dataset/OldTownSummer"
+fix_mask_rotation  = false   # legacy flag; leave false
+pad_to             = 256
+
+# -- Model ---------------------------------------------------------------------
+model         = "unet"    # pconv | unet | attunet | unet_pytorch | segformer
+layer_size    = 6         # pconv only — number of encoder/decoder levels
+base_channels = 64        # unet only  — channel width of the custom SimpleUNet
+
+# encoder_name    = "mit_b2"    # optional encoder override for segformer
+encoder_weights = "imagenet"    # "imagenet" | "none" (from-scratch)
+
+# -- Training ------------------------------------------------------------------
+epochs       = 500
+batch_size   = 64
+lr           = 1e-3
+weight_decay = 1e-3
+grad_clip    = 1.0
+
+# -- Loss ----------------------------------------------------------------------
+w_valid = 0.1   # weight on all ground-truth-valid pixels
+w_hole  = 1.0   # weight on hole pixels only (not observed by the depth cameras)
+
+uncertainty        = true  # heteroscedastic output (prediction + log_var), beta-NLL
+uncertainty_warmup = 100   # epochs of plain L1 before beta-NLL is enabled
+uncertainty_beta   = 0.5   # beta of the beta-NLL loss (Seitzer et al., ICLR 2022)
+                           # 0 = plain NLL (unstable), 0.5 = recommended, 1 = uniform
+
+# -- Output and visualisation --------------------------------------------------
+save_dir   = "./runs"
+save_every = 50    # checkpoint every N epochs
+vis_every  = 25    # validation images every N epochs
+n_vis      = 8     # random validation samples per figure
+
+# -- Augmentation: geometric ---------------------------------------------------
+aug_hflip_p = 0.5   # probability of a horizontal flip (0.0 = off)
+aug_vflip_p = 0.5   # probability of a vertical flip
+aug_rot90_p = 0.75  # probability of rot90 (0/90/180/270 deg, uniform)
+
+# -- Augmentation: ray-cone (sensor-geometry-aware) ----------------------------
+aug_ray_p         = 0.0      # probability of applying the augmentation (0.0 = off)
+aug_ray_n_max     = 3        # 1..N cones, drawn uniformly
+aug_ray_angle_deg = [5, 25]  # [min, max] cone width in degrees
+
+# -- System --------------------------------------------------------------------
+num_workers = 8
+amp         = true    # automatic mixed precision
+# resume    = "./runs/unet_20260701_195832/best.pth"   # path to a checkpoint

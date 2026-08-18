@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""
+Dataset characteristics per environment — for the paper's Dataset section.
+
+For every environment reports: number of trajectories/samples, stereo
+coverage distribution (fraction of GT-valid pixels observed by stereo),
+GT validity, and terrain statistics (per-sample elevation std/relief).
+Elevation samples are 50×50 m areas at 0.2 m/pixel derived from TartanAir
+(Wang et al., IROS 2020, https://arxiv.org/abs/2011.00359).
+
+Outputs (reports/dataset_stats/):
+    dataset_stats.csv / dataset_stats.json   per-environment aggregates
+    table_dataset.tex                        LaTeX table for the paper
+    coverage_hist.png                        coverage distribution per environment
+
+Usage:
+    python tools/dataset_stats.py                       # full dataset (~1–2 min)
+    python tools/dataset_stats.py --max_per_traj 200    # quick estimate
+"""
+import argparse
+import json
+import sys
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime
+from pathlib import Path
+
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+
+from elevcomp.folds import discover_environments
+from elevcomp.utils import write_csv
+
+# Human descriptions for the paper table — edit to match your wording.
+ENV_DESCRIPTIONS = {
+    'ForestEnv':            'dense forest',
+    'Gascola':              'rural terrain with vegetation',
+    'ModularNeighborhood':  'suburban neighbourhood',
+    'OldTownSummer':        'historical town (urban)',
+    'SeasonalForestWinter': 'winter forest',
+}
+
+
+def sample_stats(path: str) -> dict:
+    """Per-sample statistics from one NPZ (all in metres / fractions)."""
+    d = np.load(path)
+    pm = d['partial_mask'] > 0.5
+    gm = d['gt_mask'] > 0.5
+    gt = d['gt_elevation']
+    gt_valid = gt[gm & np.isfinite(gt)]
+    if gt_valid.size == 0:
+        return None
+    return {
+        'coverage': float(pm[gm].mean()) if gm.any() else np.nan,
+        'gt_valid_frac': float(gm.mean()),
+        'elev_min': float(gt_valid.min()),
+        'elev_max': float(gt_valid.max()),
+        'elev_std': float(gt_valid.std()),
+        'relief': float(np.percentile(gt_valid, 98) - np.percentile(gt_valid, 2)),
+    }
+
+
+def main():
+    p = argparse.ArgumentParser(description='Per-environment dataset statistics.')
+    p.add_argument('--data_root',
+                   default=str(Path(__file__).resolve().parent.parent
+                               / '../datasets/elevation_dataset'))
+    p.add_argument('--max_per_traj', type=int, default=0,
+                   help='sample at most N files per trajectory (0 = all)')
+    p.add_argument('--workers', type=int, default=16)
+    p.add_argument('--out', default=str(Path(__file__).resolve().parent.parent
+                                        / 'reports' / 'dataset_stats'))
+    args = p.parse_args()
+
+    data_root = Path(args.data_root).resolve()
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    envs = discover_environments(data_root)
+    rows, per_env_cov = [], {}
+
+    for env, trajs in envs.items():
+        files = []
+        for t, fs in trajs.items():
+            files.extend(fs[:args.max_per_traj] if args.max_per_traj else fs)
+        print(f'{env}: {len(trajs)} trajectories, {len(files)} samples analysed …')
+
+        with ProcessPoolExecutor(max_workers=args.workers) as ex:
+            stats = [s for s in ex.map(sample_stats,
+                                       (str(data_root / f) for f in files),
+                                       chunksize=32) if s is not None]
+
+        cov = np.array([s['coverage'] for s in stats])
+        per_env_cov[env] = cov
+        n_total = sum(len(fs) for fs in trajs.values())
+        rows.append({
+            'environment': env,
+            'description': ENV_DESCRIPTIONS.get(env, ''),
+            'n_trajectories': len(trajs),
+            'n_samples': n_total,
+            'coverage_mean': float(cov.mean()),
+            'coverage_p10': float(np.percentile(cov, 10)),
+            'coverage_p50': float(np.percentile(cov, 50)),
+            'coverage_p90': float(np.percentile(cov, 90)),
+            'gt_valid_frac': float(np.mean([s['gt_valid_frac'] for s in stats])),
+            'elev_std_mean': float(np.mean([s['elev_std'] for s in stats])),
+            'relief_mean': float(np.mean([s['relief'] for s in stats])),
+            'elev_range_min': float(np.min([s['elev_min'] for s in stats])),
+            'elev_range_max': float(np.max([s['elev_max'] for s in stats])),
+        })
+
+    write_csv(out_dir / 'dataset_stats.csv', rows)
+    with open(out_dir / 'dataset_stats.json', 'w') as f:
+        json.dump({'generated_at': datetime.now().isoformat(timespec='seconds'),
+                   'data_root': str(data_root),
+                   'max_per_traj': args.max_per_traj,
+                   'environments': rows}, f, indent=2)
+
+    # ── LaTeX table ───────────────────────────────────────────────────────────
+    lines = [
+        '% Auto-generated by tools/dataset_stats.py',
+        '% Coverage = fraction of GT-valid pixels observed by stereo.',
+        '% Relief = mean per-sample p98–p2 elevation span [m].',
+        r'\begin{tabular}{llrrccc}',
+        r'\toprule',
+        r'Environment & Terrain & Traj. & Samples & Coverage & '
+        r'$\sigma_{elev}$ [m] & Relief [m] \\',
+        r'\midrule',
+    ]
+    for r in rows:
+        lines.append(
+            f'{r["environment"]} & {r["description"]} & {r["n_trajectories"]} & '
+            f'{r["n_samples"]} & '
+            f'{r["coverage_p50"]:.2f} ({r["coverage_p10"]:.2f}–{r["coverage_p90"]:.2f}) & '
+            f'{r["elev_std_mean"]:.2f} & {r["relief_mean"]:.1f}' + r' \\')
+    lines += [r'\bottomrule', r'\end{tabular}']
+    (out_dir / 'table_dataset.tex').write_text('\n'.join(lines) + '\n')
+
+    # ── Coverage histograms (small multiples, single hue — magnitude only) ────
+    n = len(per_env_cov)
+    fig, axes = plt.subplots(1, n, figsize=(3.0 * n, 2.8),
+                             constrained_layout=True, sharey=True)
+    if n == 1:
+        axes = [axes]
+    for ax, (env, cov) in zip(axes, per_env_cov.items()):
+        ax.hist(cov, bins=30, range=(0, 1), color='#0072B2')
+        ax.axvline(float(np.median(cov)), color='#888888', ls='--', lw=1.2)
+        ax.set(title=env, xlabel='stereo coverage')
+        ax.grid(axis='y', alpha=0.25)
+        ax.spines[['top', 'right']].set_visible(False)
+    axes[0].set_ylabel('samples')
+    fig.suptitle('Stereo coverage distribution per environment '
+                 '(dashed line = median)', fontsize=10)
+    fig.savefig(out_dir / 'coverage_hist.png', dpi=130)
+    plt.close(fig)
+
+    print(f'\nWritten → {out_dir}')
+    for r in rows:
+        print(f'  {r["environment"]:<22} {r["n_samples"]:>6} samples | '
+              f'coverage p50 {r["coverage_p50"]:.2f} | relief {r["relief_mean"]:.1f} m')
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,19 @@
+# Exact versions of the environment that produced the results reported in the
+# paper (Linux, CUDA 12.8, NVIDIA RTX 5090).
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+torchaudio==2.11.0+cu128
+segmentation_models_pytorch==0.5.0
+timm==1.0.27
+torchmetrics==1.9.0
+numpy==2.4.6
+scipy==1.17.1
+pandas==3.0.3
+scikit-learn==1.9.0
+matplotlib==3.10.9
+pillow==12.2.0
+einops==0.8.2
+tqdm==4.68.2
+tensorboard==2.20.0
+open3d==0.19.0
+opencv-contrib-python==4.13.0.92

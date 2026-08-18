@@ -1,0 +1,25 @@
+# Experiment outputs and data — never committed (see docs/DATASET.md)
+runs/
+datasets/
+reports/
+*.pth
+*.ckpt
+*.npz
+!examples/sample/*.npz
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

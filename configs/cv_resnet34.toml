@@ -1,0 +1,71 @@
+# ==============================================================================
+# Main configuration of the paper: 5-fold leave-one-environment-out experiment
+# (scripts/train_cv.py) and the base for the ablations (scripts/run_ablations.py).
+#
+# Data and splits are not configured here. Folds are built automatically from
+# --data_root (default: $ELEVCOMP_DATA_ROOT or datasets/elevation_dataset) and
+# the normalisation statistics are computed from the training files of each fold.
+# Training always starts from scratch; an interrupted fold resumes from last.pth.
+#
+# Creating an experiment freezes this file into <exp_dir>/experiment.json, so
+# later edits here do not affect experiments that are already running.
+# For single-dataset training see configs/single_run.toml.
+# ==============================================================================
+
+# -- Model ---------------------------------------------------------------------
+model         = "unet_pytorch"  # pconv | unet | attunet | unet_pytorch | segformer
+layer_size    = 6         # pconv only  — number of encoder/decoder levels
+base_channels = 64        # unet only   — channel width of the custom SimpleUNet
+
+# Library models (segmentation_models_pytorch) share the I/O convention and the
+# beta-NLL head, so they differ from each other only in architecture:
+#   unet_pytorch -> smp.Unet resnet34 (~24.4M) — the main model of the paper
+#   attunet      -> the same encoder with scSE decoder attention (~24.5M)
+#   segformer    -> mit_b2 (~24.7M, Transformer)
+#   unet         -> custom SimpleUNet (~11.0M, trained from scratch)
+# encoder_name    = "mit_b2"    # optional encoder override (default per model)
+encoder_weights = "imagenet"    # "imagenet" | "none" (from-scratch)
+
+# -- Training ------------------------------------------------------------------
+epochs       = 200
+batch_size   = 64
+lr           = 1e-3
+weight_decay = 1e-3
+grad_clip    = 1.0
+
+# -- Loss ----------------------------------------------------------------------
+w_valid = 0.1   # weight on all ground-truth-valid pixels
+w_hole  = 1.0   # weight on hole pixels only (not observed by the depth cameras)
+
+uncertainty        = true   # heteroscedastic output (prediction + log_var), beta-NLL
+uncertainty_warmup = 100    # epochs of plain L1 before beta-NLL is enabled
+                            # NOTE: when lowering `epochs` for ablations, leave at
+                            # least ~150 epochs after the warmup or sigma will not
+                            # be learned
+uncertainty_beta   = 0.5    # beta of the beta-NLL loss (Seitzer et al., ICLR 2022)
+
+# -- Augmentation: geometric ---------------------------------------------------
+aug_hflip_p = 0.5    # probability of a horizontal flip (0.0 = off)
+aug_vflip_p = 0.5    # probability of a vertical flip
+aug_rot90_p = 0.75   # probability of rot90 (0/90/180/270 deg, uniform)
+
+# -- Augmentation: ray-cone (sensor-geometry-aware) ----------------------------
+aug_ray_p         = 0.25     # probability of applying the augmentation (0.0 = off)
+aug_ray_n_max     = 3        # 1..N cones, drawn uniformly
+aug_ray_angle_deg = [5, 25]  # [min, max] cone width in degrees
+
+# -- Data geometry -------------------------------------------------------------
+pad_to            = 256      # 251x251 inputs are centred in a 256x256 canvas
+fix_mask_rotation = false    # legacy flag for datasets generated before the
+                             # mask-orientation fix; leave false
+
+# -- Output and visualisation --------------------------------------------------
+save_dir   = "./runs"   # experiments are created as runs/cv_<name>_<timestamp>/
+save_every = 50         # write epoch_NNN.pth every N epochs
+vis_every  = 25         # write validation images every N epochs
+n_vis      = 8          # samples per figure (also for test_samples.png)
+
+# -- System --------------------------------------------------------------------
+num_workers = 8
+amp         = true      # automatic mixed precision
+amp_dtype   = "fp16"    # "fp16" (default, with grad scaler) | "bf16" (no scaler)
