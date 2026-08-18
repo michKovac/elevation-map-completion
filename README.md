@@ -125,7 +125,7 @@ the metric that matters, and a trivial always-safe classifier would score 1.0 on
 ## Installation
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/michKovac/elevation-map-completion.git
 cd elevation-map-completion
 
 python -m venv .venv && source .venv/bin/activate

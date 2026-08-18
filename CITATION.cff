@@ -36,8 +36,7 @@ authors:
       Faculty of Electrical Engineering and Information Technology, Slovak
       University of Technology in Bratislava
 license: MIT
-# TODO: set once the repository is public
-repository-code: 'https://github.com/ToBeAdded/elevation-map-completion'
+repository-code: 'https://github.com/michKovac/elevation-map-completion'
 keywords:
   - elevation map completion
   - sensor-geometry data augmentation

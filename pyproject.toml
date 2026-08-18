@@ -57,8 +57,7 @@ dev = [
 ]
 
 [project.urls]
-# TODO: set once the repository is public
-Repository = "https://github.com/ToBeAdded/elevation-map-completion"
+Repository = "https://github.com/michKovac/elevation-map-completion"
 
 [tool.setuptools.packages.find]
 include = ["elevcomp*"]
