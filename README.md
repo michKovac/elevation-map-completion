@@ -1,8 +1,8 @@
 <h1 align="center">Elevation Map Completion</h1>
 
 <p align="center">
-  <em>Robot-centric elevation map completion with sensor-geometry-aware<br>
-  augmentation and heteroscedastic uncertainty estimation</em>
+  <em>Filling the gaps in robot-centric elevation maps,<br>
+  with a per-cell uncertainty a planner can act on</em>
 </p>
 
 <p align="center">
